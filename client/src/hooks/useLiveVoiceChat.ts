@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import toast from 'react-hot-toast';
 
 type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
@@ -42,7 +42,7 @@ function writeString(view: DataView, offset: number, string: string) {
 }
 
 // --- [MODIFIED] Hook now accepts initial configuration ---
-export const useLiveVoiceChat = (isRagEnabled: boolean, sessionId: string) => {
+export const useLiveVoiceChat = (isRagEnabled: boolean, sessionId: string, systemPrompt: string) => {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
   const [conversationStatus, setConversationStatus] = useState<ConversationStatus>('idle');
 
@@ -87,7 +87,21 @@ export const useLiveVoiceChat = (isRagEnabled: boolean, sessionId: string) => {
   }, []);
 
   const connect = useCallback(() => {
-    if (socketRef.current || connectionStatus === 'connecting') return;
+    console.log("Attempting to connect. Current socketRef:", socketRef.current, "connectionStatus:", connectionStatus);
+    
+    // Force cleanup any existing connection before creating new one
+    if (socketRef.current) {
+      console.log("Cleaning up existing connection before reconnecting");
+      socketRef.current.close();
+      socketRef.current = null;
+    }
+    
+    if (connectionStatus === 'connecting') {
+      console.log("Already connecting - skipping");
+      return;
+    }
+    
+    console.log("Initiating WebSocket connection...");
     setConnectionStatus('connecting');
     const ws = new WebSocket(`ws://localhost:8000/ws/v1/live-chat`);
 
@@ -96,7 +110,8 @@ export const useLiveVoiceChat = (isRagEnabled: boolean, sessionId: string) => {
       ws.send(JSON.stringify({
         config: {
           isRagEnabled: isRagEnabled,
-          sessionId: sessionId
+          sessionId: sessionId,
+          systemPrompt: systemPrompt
         }
       }));
       // ------------------------------------------------
@@ -124,11 +139,14 @@ export const useLiveVoiceChat = (isRagEnabled: boolean, sessionId: string) => {
       setConnectionStatus('error');
     };
     ws.onclose = () => {
+      console.log("WebSocket connection closed");
       if(connectionStatus !== 'error') toast.success("Live connection closed.");
       setConnectionStatus('disconnected');
+      setConversationStatus('idle');
+      socketRef.current = null; // Ensure socket ref is cleared
     };
     socketRef.current = ws;
-  }, [connectionStatus, isRagEnabled, sessionId, processAudioQueue]);
+  }, [connectionStatus, isRagEnabled, sessionId, systemPrompt, processAudioQueue]);
   
   const startRecording = async () => {
     if (audioWorkletNodeRef.current) return;
@@ -170,17 +188,26 @@ export const useLiveVoiceChat = (isRagEnabled: boolean, sessionId: string) => {
   };
   
   const stopRecording = () => {
-    if (mediaStreamRef.current) mediaStreamRef.current.getTracks().forEach(track => track.stop());
+    // Stop media stream tracks
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach(track => track.stop());
+      mediaStreamRef.current = null;
+    }
+    
+    // Clean up audio worklet
     if (audioWorkletNodeRef.current) {
         audioWorkletNodeRef.current.port.close();
         audioWorkletNodeRef.current.disconnect();
         audioWorkletNodeRef.current = null;
     }
+    
+    // Close recording audio context
     if (recordingAudioContextRef.current) {
         recordingAudioContextRef.current.close().then(() => {
             recordingAudioContextRef.current = null;
         });
     }
+    
     setConversationStatus('processing');
   };
 
@@ -189,15 +216,48 @@ export const useLiveVoiceChat = (isRagEnabled: boolean, sessionId: string) => {
     else if (conversationStatus === 'recording') stopRecording();
   };
   
-  const disconnect = () => {
+  const disconnect = useCallback(() => {
+    console.log("Disconnecting voice chat...");
     stopRecording();
-    socketRef.current?.close();
+    
+    // Close WebSocket connection
+    if (socketRef.current) {
+      console.log("Closing WebSocket connection");
+      socketRef.current.close();
+      socketRef.current = null; // Clear the reference to allow reconnection
+    }
+    
+    // Close playback audio context
     if (playbackAudioContextRef.current) {
         playbackAudioContextRef.current.close().then(() => {
             playbackAudioContextRef.current = null;
         });
     }
-  };
+    
+    // Clear audio queue
+    audioQueueRef.current = [];
+    isPlayingRef.current = false;
+    
+    // Reset status to disconnected
+    console.log("Setting connection status to disconnected");
+    setConnectionStatus('disconnected');
+    setConversationStatus('idle');
+  }, []);
+
+  // Cleanup effect - ensure proper disconnection when hook unmounts or key dependencies change
+  useEffect(() => {
+    return () => {
+      console.log("useLiveVoiceChat cleanup - disconnecting...");
+      if (socketRef.current) {
+        socketRef.current.close();
+        socketRef.current = null;
+      }
+      // Stop any active recording
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, []);
 
   return { connectionStatus, conversationStatus, connect, disconnect, toggleRecording };
 };

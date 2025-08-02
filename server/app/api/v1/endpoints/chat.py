@@ -13,6 +13,7 @@ class ChatRequest(BaseModel):
     session_id:str
     message:str
     use_rag: bool = False
+    system_prompt: str = "You are a helpful and friendly AI assistant. Provide clear, accurate, and concise responses to user questions."
     
 
 # @router.post("/chat")
@@ -34,7 +35,8 @@ async def chat(request: ChatRequest):
     inputs = {
         "messages": [HumanMessage(content=request.message)],
         "use_rag": request.use_rag, # ADD this
-        "session_id": request.session_id
+        "session_id": request.session_id,
+        "system_prompt": request.system_prompt # ADD the system prompt
     }
     
     try:

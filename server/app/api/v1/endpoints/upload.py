@@ -41,6 +41,18 @@ async def upload_file(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No file name provided."
         )
+    
+    # Check file size (limit to 50MB)
+    MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB in bytes
+    file_content = await file.read()
+    if len(file_content) > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"File too large. Maximum size allowed is 50MB. Your file is {len(file_content) / (1024*1024):.1f}MB."
+        )
+    
+    # Reset file pointer for later use
+    await file.seek(0)
 
     # Create a unique, secure filename to avoid collisions and path traversal
     file_extension = os.path.splitext(file.filename)[1]
@@ -54,18 +66,32 @@ async def upload_file(
 
         # --- Core Logic: Parse and Embed ---
         print(f"Parsing file: {file.filename} ({file_path})")
-        document_chunks = document_parser.parse_file(file_path, file_extension)
+        try:
+            document_chunks = document_parser.parse_file(file_path, file_extension)
+        except Exception as e:
+            print(f"Error parsing file {file.filename}: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Could not parse the file '{file.filename}'. The file might be corrupted or in an unsupported format. Error: {str(e)}"
+            )
 
         if not document_chunks:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Could not parse any content from the file: {file.filename}"
+                detail=f"Could not extract any text content from the file: {file.filename}. The file might be empty or contain only images."
             )
 
-        print(f"Adding {len(document_chunks)} chunks to the vector store.")
+        print(f"Successfully parsed {len(document_chunks)} text chunks from {file.filename}")
         print(f"Adding chunks to vector store for session_id: {session_id}")
-        vector_store.add_documents_to_store(document_chunks, session_id)
-        # vector_store.add_documents_to_store(document_chunks)
+        
+        try:
+            vector_store.add_documents_to_store(document_chunks, session_id)
+        except Exception as e:
+            print(f"Vector store error: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to create embeddings for the document. {str(e)}"
+            )
         
         # Here you could also link the document IDs/chunks to the session_id in Redis/Postgres
         # For now, we are adding to a global store for simplicity.

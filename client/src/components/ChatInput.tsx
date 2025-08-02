@@ -16,10 +16,11 @@ interface ChatInputProps {
   input: string;
   isLoading: boolean;
   handleInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  sendMessage: (e: React.FormEvent<HTMLFormElement>, isRagEnabled: boolean) => void;
+  sendMessage: (e: React.FormEvent<HTMLFormElement>, isRagEnabled: boolean, systemPrompt?: string) => void;
   uploadFile: (file: File) => void;
   isRagEnabled: boolean;
   onRagToggle: (enabled: boolean) => void;
+  systemPrompt: string;
 }
 
 export function ChatInput({
@@ -30,6 +31,7 @@ export function ChatInput({
   uploadFile,
   isRagEnabled,
   onRagToggle,
+  systemPrompt,
 }: ChatInputProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -66,7 +68,7 @@ export function ChatInput({
         </Button>
         
         {/* The main chat input form */}
-        <form onSubmit={(e) => sendMessage(e, isRagEnabled)} className="flex-1 flex items-center gap-2">
+        <form onSubmit={(e) => sendMessage(e, isRagEnabled, systemPrompt)} className="flex-1 flex items-center gap-2">
           <Input
             value={input}
             onChange={handleInputChange}

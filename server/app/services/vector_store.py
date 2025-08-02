@@ -78,14 +78,26 @@ def add_documents_to_store(documents: List[Document],session_id: str):
     if not documents:
         return
     
-    # --- CORE CHANGE: Add metadata to each document chunk ---
-    for doc in documents:
-        doc.metadata = {"session_id": session_id, **doc.metadata}
-    # --------------------------------------------------------
+    try:
+        # --- CORE CHANGE: Add metadata to each document chunk ---
+        for doc in documents:
+            doc.metadata = {"session_id": session_id, **doc.metadata}
+        # --------------------------------------------------------
 
-    print(f"Adding {len(documents)} document chunks with session_id '{session_id}' to ChromaDB.")
-    vector_store.add_documents(documents)
-    print("Successfully added documents to the store.")
+        print(f"Adding {len(documents)} document chunks with session_id '{session_id}' to ChromaDB.")
+        print("Creating embeddings with Google API...")
+        vector_store.add_documents(documents)
+        print("Successfully added documents to the store.")
+        
+    except Exception as e:
+        print(f"Error creating embeddings or adding to vector store: {e}")
+        # Check if it's a Google API issue
+        if "google" in str(e).lower() or "api_key" in str(e).lower():
+            raise Exception(f"Google API Error: {str(e)}. Please check your Google API key configuration.")
+        elif "timeout" in str(e).lower():
+            raise Exception("Embedding process timed out. The file might be too large or complex.")
+        else:
+            raise Exception(f"Vector store error: {str(e)}")
 
 
 def get_retriever(session_id: str, search_kwargs={"k": 3}):

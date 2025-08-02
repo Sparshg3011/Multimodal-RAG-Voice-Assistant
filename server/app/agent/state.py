@@ -7,6 +7,7 @@ class AgentState(TypedDict):
     context: str # To hold retrive context
     use_rag: bool # Flag to decide if we should use rag or not
     session_id: str
+    system_prompt: str # User-provided system prompt for agent behavior
     
     
     

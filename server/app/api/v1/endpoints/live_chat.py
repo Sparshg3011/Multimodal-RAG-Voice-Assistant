@@ -10,7 +10,8 @@ from app.services import vector_store
 router = APIRouter()
 
 client = genai.Client(api_key=settings.GOOGLE_API_KEY)
-MODEL = "gemini-2.0-flash-exp" # Use the latest supported model
+# Live voice model
+MODEL = "gemini-2.0-flash-exp"  # Use the latest supported model for real-time voice
 
 # --- [NEW] Helper to get RAG context ---
 def get_rag_context_for_session(session_id: str) -> str:
@@ -48,13 +49,16 @@ async def live_chat(websocket: WebSocket):
         
         is_rag_enabled = initial_config.get("isRagEnabled", False)
         session_id = initial_config.get("sessionId")
+        user_system_prompt = initial_config.get("systemPrompt", "You are a friendly and helpful voice assistant. Keep your responses concise and conversational.")
         
-        system_prompt = "You are a friendly and helpful voice assistant. Keep your responses concise and conversational."
+        system_prompt = user_system_prompt
 
         if is_rag_enabled:
             print("Voice RAG mode enabled. Fetching context...")
             rag_context = get_rag_context_for_session(session_id)
-            system_prompt = f"""You are an intelligent assistant. Your ONLY source of knowledge is the following set of documents provided by the user. Do not use your general knowledge.
+            system_prompt = f"""{user_system_prompt}
+
+            Your ONLY source of knowledge is the following set of documents provided by the user. Do not use your general knowledge.
             When asked a question, answer it directly using only information from these documents.
             If the answer is not in the documents, you MUST say 'The provided documents do not contain that information.'
 

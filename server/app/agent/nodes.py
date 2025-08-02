@@ -17,15 +17,17 @@ load_dotenv()
 os.environ["GOOGLE_API_KEY"] = os.getenv("GOOGLE_API_KEY")
 # os.environ["GROQ_API_KEY"] = os.getenv("GROQ_API_KEY")
 
+# Model configuration
+gemini_model = os.getenv("GEMINI_MODEL", "gemini-1.5-pro")  # Default fallback
 
-
-llm_gemini = ChatGoogleGenerativeAI(model=os.getenv("GEMINI_MODEL"), temperature=0)
+# Text chat models (with temperature settings)
+llm_gemini = ChatGoogleGenerativeAI(model=gemini_model, temperature=0)
 # llm_groq = ChatGroq(model=os.getenv("GROQ_MODEL"), temperature=0)
 
 llm_gemini_rag = ChatGoogleGenerativeAI(
-    model=os.getenv("GEMINI_MODEL"),
+    model=gemini_model,
     temperature=0.7,
-    convert_system_message_to_human=True # Important for Gemini
+    convert_system_message_to_human=True  # Important for Gemini
 )
 
 
@@ -156,8 +158,12 @@ def generate_with_context(state: AgentState):
     user_query = state["messages"][-1].content
     context = state.get("context", "")
 
-    # --- NEW, IMPROVED PROMPT ---
-    prompt = f"""You are an intelligent assistant. Use the following document snippets as your primary source of knowledge to answer the user's question. The snippets are from a document the user just uploaded.
+    # Use the user-provided system prompt with RAG context
+    user_system_prompt = state.get("system_prompt", "You are a helpful AI assistant.")
+    
+    prompt = f"""{user_system_prompt}
+
+    Use the following document snippets as your primary source of knowledge to answer the user's question. The snippets are from a document the user just uploaded.
 
     If the user's question is general, like "what is this document about?" or "summarize this file", provide a concise summary of the provided context.
 
@@ -189,7 +195,17 @@ def generate_direct(state: AgentState):
     This is the standard chat path.
     """
     print("--- NODE: Generating direct response (no RAG) ---")
-    response = llm_gemini.invoke(state["messages"])
+    
+    # Get the user-provided system prompt
+    user_system_prompt = state.get("system_prompt", "You are a helpful AI assistant.")
+    
+    # Create messages with system prompt
+    messages_for_llm = [("system", user_system_prompt)] + [
+        (msg.type if hasattr(msg, 'type') else "user", msg.content) 
+        for msg in state["messages"]
+    ]
+    
+    response = llm_gemini.invoke(messages_for_llm)
     return {"messages": [response]}
 
 

@@ -20,11 +20,12 @@ export const useChat = (sessionId: string) => {
   };
 
   /**
-   * Sends a message to the backend, including the RAG flag.
+   * Sends a message to the backend, including the RAG flag and system prompt.
    */
   const sendMessage = async (
     e: React.FormEvent<HTMLFormElement>,
-    isRagEnabled: boolean // <-- The new parameter
+    isRagEnabled: boolean, // <-- The RAG flag parameter
+    systemPrompt?: string // <-- The system prompt parameter
   ) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
@@ -39,6 +40,7 @@ export const useChat = (sessionId: string) => {
         session_id: sessionId,
         message: input,
         use_rag: isRagEnabled, // <-- Pass the flag to the backend
+        system_prompt: systemPrompt, // <-- Pass the system prompt to the backend
       });
       const botMessage: Message = {
         id: uuidv4(),
@@ -61,7 +63,14 @@ export const useChat = (sessionId: string) => {
   const uploadFile = async (file: File) => {
     if (!file || isLoading) return;
 
-    const uploadToastId = toast.loading(`Uploading ${file.name}...`);
+    // Check file size on frontend too
+    const maxSize = 50 * 1024 * 1024; // 50MB
+    if (file.size > maxSize) {
+      toast.error(`File too large. Maximum size is 50MB. Your file is ${(file.size / (1024*1024)).toFixed(1)}MB.`);
+      return;
+    }
+
+    let uploadToastId = toast.loading(`📄 Uploading ${file.name}...`);
     setIsLoading(true);
 
     const formData = new FormData();
@@ -69,10 +78,20 @@ export const useChat = (sessionId: string) => {
     formData.append('session_id', sessionId);
 
     try {
+      // Update progress message
+      toast.loading(`🔄 Processing ${file.name}... This may take up to 2 minutes for large files.`, { id: uploadToastId });
+      
+      // Add timeout to prevent hanging
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minute timeout
+      
       const response = await fetch('http://localhost:8000/api/v1/upload', {
         method: 'POST',
         body: formData,
+        signal: controller.signal,
       });
+      
+      clearTimeout(timeoutId);
 
       const result = await response.json();
 
@@ -90,7 +109,16 @@ export const useChat = (sessionId: string) => {
       setMessages(prev => [...prev, systemMessage]);
 
     } catch (error: any) {
-      toast.error(error.message || 'An error occurred during upload.', { id: uploadToastId });
+      console.error('Upload error:', error);
+      let errorMessage = 'An error occurred during upload.';
+      
+      if (error.name === 'AbortError') {
+        errorMessage = 'Upload timed out. The file might be too large or the server is busy. Please try again.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      toast.error(errorMessage, { id: uploadToastId });
     } finally {
       setIsLoading(false);
     }
