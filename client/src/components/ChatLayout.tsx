@@ -23,6 +23,7 @@ export function ChatLayout({ sessionId }: ChatLayoutProps) {
     handleInputChange,
     sendMessage,
     uploadFile,
+    uploadUserDetails,
   } = useChat(sessionId);
   
   const [isTextRagEnabled, setIsTextRagEnabled] = useState(false);
@@ -145,6 +146,7 @@ export function ChatLayout({ sessionId }: ChatLayoutProps) {
           isRagEnabled={isTextRagEnabled}
           onRagToggle={setIsTextRagEnabled}
           systemPrompt={systemPrompt}
+          uploadUserDetails={uploadUserDetails}
         />
       </CardFooter>
       <LiveChatModal

@@ -124,6 +124,70 @@ export const useChat = (sessionId: string) => {
     }
   };
 
+  const uploadUserDetails = async (file: File) => {
+    if (!file || isLoading) return;
+
+    // Check file size on frontend too
+    const maxSize = 50 * 1024 * 1024; // 50MB
+    if (file.size > maxSize) {
+      toast.error(`File too large. Maximum size is 50MB. Your file is ${(file.size / (1024*1024)).toFixed(1)}MB.`);
+      return;
+    }
+
+    let uploadToastId = toast.loading(`👤 Uploading user details: ${file.name}...`);
+    setIsLoading(true);
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('session_id', sessionId);
+
+    try {
+      // Update progress message
+      toast.loading(`🔄 Processing user details: ${file.name}... This may take up to 2 minutes for large files.`, { id: uploadToastId });
+      
+      // Add timeout to prevent hanging
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minute timeout
+      
+      const response = await fetch('http://localhost:8000/api/v1/upload-user-details', {
+        method: 'POST',
+        body: formData,
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.detail || 'User details upload failed');
+      }
+      
+      toast.success(result.message || 'User details uploaded successfully!', { id: uploadToastId });
+      
+      const systemMessage: Message = {
+        id: uuidv4(),
+        role: 'system',
+        content: `User details file "${file.name}" uploaded successfully. You can now enable the "Query Uploaded Files" switch to ask questions about the user details.`,
+      };
+      setMessages(prev => [...prev, systemMessage]);
+
+    } catch (error: any) {
+      console.error('User details upload error:', error);
+      let errorMessage = 'An error occurred during user details upload.';
+      
+      if (error.name === 'AbortError') {
+        errorMessage = 'Upload timed out. The file might be too large or the server is busy. Please try again.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      toast.error(errorMessage, { id: uploadToastId });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return {
     messages,
     input,
@@ -131,5 +195,6 @@ export const useChat = (sessionId: string) => {
     handleInputChange,
     sendMessage,
     uploadFile,
+    uploadUserDetails,
   };
 };

@@ -1,5 +1,5 @@
 // src/components/ChatInput.tsx
-import { Paperclip, SendHorizonal, Loader2, BrainCircuit } from 'lucide-react';
+import { Paperclip, SendHorizonal, Loader2, BrainCircuit, User } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { useRef } from 'react';
@@ -18,6 +18,7 @@ interface ChatInputProps {
   handleInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   sendMessage: (e: React.FormEvent<HTMLFormElement>, isRagEnabled: boolean, systemPrompt?: string) => void;
   uploadFile: (file: File) => void;
+  uploadUserDetails: (file: File) => void;
   isRagEnabled: boolean;
   onRagToggle: (enabled: boolean) => void;
   systemPrompt: string;
@@ -29,11 +30,13 @@ export function ChatInput({
   handleInputChange,
   sendMessage,
   uploadFile,
+  uploadUserDetails,
   isRagEnabled,
   onRagToggle,
   systemPrompt,
 }: ChatInputProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const userDetailsInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -41,13 +44,24 @@ export function ChatInput({
     }
   };
 
+  const handleUserDetailsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      uploadUserDetails(e.target.files[0]);
+    }
+  };
+
   const handleUploadClick = () => {
     fileInputRef.current?.click();
+  };
+
+  const handleUserDetailsUploadClick = () => {
+    userDetailsInputRef.current?.click();
   };
 
   return (
     <div className="p-4 bg-background w-full">
       <div className="flex items-center gap-2">
+        {/* Hidden file inputs */}
         <Input
           id="file-upload"
           type="file"
@@ -56,16 +70,61 @@ export function ChatInput({
           className="hidden"
           disabled={isLoading}
         />
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={handleUploadClick}
+        <Input
+          id="user-details-upload"
+          type="file"
+          ref={userDetailsInputRef}
+          onChange={handleUserDetailsChange}
+          className="hidden"
           disabled={isLoading}
-          aria-label="Upload file"
-        >
-          <Paperclip className="h-5 w-5" />
-        </Button>
+        />
+        
+        {/* Document Upload Button */}
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={handleUploadClick}
+                disabled={isLoading}
+                aria-label="Upload document"
+                className="hover:bg-blue-50 hover:text-blue-600 border border-blue-200"
+              >
+                <Paperclip className="h-5 w-5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Upload Documents</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+
+        {/* User Details Upload Button */}
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={handleUserDetailsUploadClick}
+                disabled={isLoading}
+                aria-label="Upload user details"
+                className="hover:bg-green-50 hover:text-green-600 border border-green-200"
+              >
+                <User className="h-5 w-5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Upload User Details</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+        
+        {/* Visual separator */}
+        <div className="w-px h-6 bg-gray-300 mx-1"></div>
         
         {/* The main chat input form */}
         <form onSubmit={(e) => sendMessage(e, isRagEnabled, systemPrompt)} className="flex-1 flex items-center gap-2">

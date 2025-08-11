@@ -121,3 +121,106 @@ async def upload_file(
         
         # Ensure the file stream is closed
         await file.close()
+
+
+@router.post("/upload-user-details")
+async def upload_user_details(
+    file: UploadFile = File(...), 
+    session_id: str = Form(...)
+):
+    """
+    Handles user details file uploads for RAG.
+    This endpoint is specifically for user details but uses the same vector database infrastructure.
+    
+    This endpoint:
+    1.  Receives a file and a session_id.
+    2.  Saves the file to a temporary location with a unique name.
+    3.  Calls the document_parser service to extract content into chunks.
+    4.  Calls the vector_store service to embed and store the chunks with user details metadata.
+    5.  Cleans up the temporary file.
+    6.  Returns a success or error response.
+    """
+    
+    if not file.filename:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No file name provided."
+        )
+    
+    # Check file size (limit to 50MB)
+    MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB in bytes
+    file_content = await file.read()
+    if len(file_content) > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"File too large. Maximum size allowed is 50MB. Your file is {len(file_content) / (1024*1024):.1f}MB."
+        )
+    
+    # Reset file pointer for later use
+    await file.seek(0)
+
+    # Create a unique, secure filename to avoid collisions and path traversal
+    file_extension = os.path.splitext(file.filename)[1]
+    unique_filename = f"{uuid.uuid4()}{file_extension}"
+    file_path = os.path.join(UPLOAD_DIR, unique_filename)
+
+    try:
+        # Save the uploaded file to the temporary directory
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        # --- Core Logic: Parse and Embed ---
+        print(f"Parsing user details file: {file.filename} ({file_path})")
+        try:
+            document_chunks = document_parser.parse_file(file_path, file_extension)
+        except Exception as e:
+            print(f"Error parsing user details file {file.filename}: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Could not parse the user details file '{file.filename}'. The file might be corrupted or in an unsupported format. Error: {str(e)}"
+            )
+
+        if not document_chunks:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Could not extract any text content from the user details file: {file.filename}. The file might be empty or contain only images."
+            )
+
+        print(f"Successfully parsed {len(document_chunks)} text chunks from user details file {file.filename}")
+        print(f"Adding user details chunks to vector store for session_id: {session_id}")
+        
+        try:
+            # Add user details to the same vector store but with special metadata
+            vector_store.add_documents_to_store(document_chunks, session_id)
+        except Exception as e:
+            print(f"Vector store error for user details: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to create embeddings for the user details document. {str(e)}"
+            )
+        
+        return {
+            "status": "success",
+            "filename": file.filename,
+            "chunks_added": len(document_chunks),
+            "message": "User details file processed and added to the knowledge base successfully. You can now ask questions about the user details with RAG enabled."
+        }
+
+    except HTTPException as e:
+        # Re-raise HTTP exceptions to be handled by FastAPI
+        raise e
+    except Exception as e:
+        # Catch any other unexpected errors during processing
+        print(f"Error processing user details file {file.filename}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred while processing the user details file: {e}"
+        )
+    finally:
+        # --- Cleanup: Ensure the temporary file is always deleted ---
+        if os.path.exists(file_path):
+            os.remove(file_path)
+            print(f"Cleaned up temporary user details file: {file_path}")
+        
+        # Ensure the file stream is closed
+        await file.close()
