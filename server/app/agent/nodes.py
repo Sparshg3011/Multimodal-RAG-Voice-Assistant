@@ -14,8 +14,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-os.environ["GOOGLE_API_KEY"] = os.getenv("GOOGLE_API_KEY")
-# os.environ["GROQ_API_KEY"] = os.getenv("GROQ_API_KEY")
+# Only set environment variables if they exist
+google_api_key = os.getenv("GOOGLE_API_KEY")
+if google_api_key:
+    os.environ["GOOGLE_API_KEY"] = google_api_key
 
 # Model configuration
 gemini_model = os.getenv("GEMINI_MODEL", "gemini-1.5-pro")  # Default fallback
@@ -146,8 +148,15 @@ def retrieve_from_rag(state: AgentState):
 def run_web_search(state: AgentState):
     """Node to perform web search."""
     search_tool = web_search.get_web_search_tool()
-    search_results = search_tool.invoke({"query": state["messages"][-1].content})
-    return {"context": search_results}
+    
+    if not search_tool:
+        return {"context": "Web search is not available. Please provide a TAVILY_API_KEY in your environment variables."}
+    
+    try:
+        search_results = search_tool.invoke({"query": state["messages"][-1].content})
+        return {"context": search_results}
+    except Exception as e:
+        return {"context": f"Web search failed: {str(e)}"}
 
 def generate_with_context(state: AgentState):
     """
