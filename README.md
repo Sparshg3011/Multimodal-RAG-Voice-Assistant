@@ -1,266 +1,351 @@
+<div align="center">
+
 # Multimodal Live RAG Voice Chatbot
 
-## 1. Overview
+**Text. Voice. Documents. One unified AI assistant that understands them all.**
 
-This project is a sophisticated, multimodal chatbot application featuring a React/TypeScript frontend and a Python/FastAPI backend. It is designed to provide a rich, interactive user experience by combining standard text chat, real-time voice conversations, and Retrieval-Augmented Generation (RAG) capabilities for both text and voice.
+[![React](https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![Python](https://img.shields.io/badge/Python-3.12+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![LangGraph](https://img.shields.io/badge/LangGraph-1C3C3C?style=for-the-badge&logo=langchain&logoColor=white)](https://langchain-ai.github.io/langgraph/)
+[![Gemini](https://img.shields.io/badge/Google_Gemini-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev/)
+[![ChromaDB](https://img.shields.io/badge/ChromaDB-FF6F00?style=for-the-badge)](https://www.trychroma.com/)
+[![Redis](https://img.shields.io/badge/Redis-DC382D?style=for-the-badge&logo=redis&logoColor=white)](https://redis.io/)
+[![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
 
-The agent's logic is orchestrated using **LangGraph**, allowing for flexible and stateful conversational flows. The system can answer general questions or query a session-specific knowledge base created from user-uploaded documents.
+[Features](#features) · [Architecture](#architecture) · [Quick Start](#quick-start) · [How It Works](#how-it-works) · [API Reference](#api-reference) · [Contributing](#contributing)
 
-### Key Features
-
-*   **Text-Based Chat:** A familiar, responsive chat interface for sending and receiving text messages.
-*   **Document Q&A (RAG):** Users can upload documents (`.pdf`, `.docx`, `.txt`, etc.). The system parses these documents, stores them in a vector database (ChromaDB), and can answer questions based *only* on the content of those documents.
-*   **Live Voice Chat:** A real-time, low-latency voice conversation feature. Users can speak to the assistant and receive spoken responses.
-*   **Voice RAG:** The live voice chat can be toggled into RAG mode, allowing users to verbally ask questions about their uploaded documents.
-*   **Multimodal Interaction:** Seamlessly switch between text, document uploads, and voice chat within the same user session.
-*   **Session-Specific Context:** All interactions and uploaded documents are tied to a unique session ID, ensuring user data privacy and contextually relevant conversations.
-
----
-
-## 2. Architecture
-
-The application is a standard client-server monorepo.
-
-
-
-### Frontend (`/client`)
-
-*   **Framework:** React with Vite and TypeScript.
-*   **UI Components:** Built using **shadcn/ui**, which provides accessible, themeable, and composable components on top of Radix UI and Tailwind CSS.
-*   **State Management:** Component-level state is managed with React hooks (`useState`, `useRef`). There is no global state manager like Redux or Zustand, simplifying the logic into custom hooks.
-*   **Core Logic Hooks:**
-    *   `useChat`: Orchestrates the text-based chat, including sending messages and handling file uploads via REST API calls.
-    *   `useLiveVoiceChat`: Manages the real-time WebSocket connection, audio recording (using the Web Audio API), and playback for the voice chat feature.
-*   **API Communication:**
-    *   **Axios:** Used for standard HTTP requests (chat messages, file uploads) to the FastAPI backend.
-    *   **WebSockets:** Used for the bidirectional, real-time streaming of audio data for the live voice chat.
-
-### Backend (`/server`)
-
-*   **Framework:** FastAPI, providing a high-performance, asynchronous API.
-*   **Agent Logic:** **LangGraph** is used to define and execute the conversational agent as a stateful graph. This allows for complex, conditional routing based on user input and state.
-*   **LLM Integration:** Primarily uses **Google Gemini** models (`gemini-2.0-flash-exp` for voice, `gemini-1.5-flash-latest` for text) via the `langchain-google-genai` library. The architecture is modular to support other models like Groq or OpenAI.
-*   **Vector Store (RAG):** **ChromaDB** is used as the persistent vector database. Document chunks are converted to embeddings using Google's `embedding-001` model.
-*   **Chat History:** **Redis** is used for storing and retrieving conversational history for each session, leveraging `RedisChatMessageHistory`.
-*   **Real-time Communication:**
-    *   **WebSockets:** FastAPI handles WebSocket connections for the live voice chat.
-    *   **Google Gemini Live API:** The backend acts as a proxy, forwarding audio streams from the client to Gemini's live API and streaming the generated audio response back to the client.
+</div>
 
 ---
 
-## 3. Getting Started
+## About
+
+A multimodal AI chatbot that combines text chat, real-time voice conversations, and document-based Q&A (RAG) into a single seamless experience. Upload your PDFs, DOCX files, or text documents — then ask questions by typing or speaking. Powered by Google Gemini, orchestrated with LangGraph, and grounded in your documents via ChromaDB vector search.
+
+---
+
+## Features
+
+| Feature | Description |
+|:--------|:------------|
+| **Text Chat** | Responsive chat interface with streaming-ready message handling |
+| **Document Q&A (RAG)** | Upload `.pdf`, `.docx`, `.txt` and ask questions grounded in their content |
+| **Live Voice Chat** | Real-time, low-latency voice conversations via WebSocket audio streaming |
+| **Voice RAG** | Speak your questions about uploaded documents and get spoken answers |
+| **Multimodal Switching** | Seamlessly switch between text, voice, and document modes in one session |
+| **Session Isolation** | Every session has its own document store, chat history, and context |
+| **LangGraph Orchestration** | Stateful agent graph with conditional routing for RAG vs. direct generation |
+| **Persistent History** | Redis-backed conversation history across interactions |
+
+---
+
+## Architecture
+
+```mermaid
+graph TB
+    subgraph Client ["Frontend — React / Vite / TypeScript"]
+        A[Chat Interface<br/>useChat Hook]
+        B[File Upload<br/>Drag & Drop]
+        C[Live Voice Modal<br/>useLiveVoiceChat Hook]
+        D[Audio Worklet<br/>PCM Processing]
+    end
+
+    subgraph Server ["Backend — Python / FastAPI"]
+        E[REST API<br/>/api/v1/chat]
+        F[Upload Handler<br/>/api/v1/upload]
+        G[WebSocket<br/>/ws/v1/live-chat]
+        H["LangGraph Agent<br/>(StateGraph)"]
+        I[Document Parser]
+    end
+
+    subgraph AI ["AI Layer"]
+        J[Gemini 1.5 Flash<br/>Text Generation]
+        K[Gemini 2.0 Flash<br/>Live Voice API]
+    end
+
+    subgraph Storage ["Data Layer"]
+        L[(ChromaDB<br/>Vector Store)]
+        M[(Redis<br/>Chat History)]
+    end
+
+    A -->|HTTP POST| E
+    B -->|Multipart Upload| F
+    C <-->|WebSocket Audio| G
+    D -->|PCM Chunks| C
+
+    E --> H
+    F --> I --> L
+    G <-->|Audio Stream| K
+
+    H -->|RAG Path| L
+    H -->|Generate| J
+    H -->|History| M
+
+    style Client fill:#0a0a0a,stroke:#61DAFB,stroke-width:2px,color:#fff
+    style Server fill:#0a0a0a,stroke:#009688,stroke-width:2px,color:#fff
+    style AI fill:#0a0a0a,stroke:#4285F4,stroke-width:2px,color:#fff
+    style Storage fill:#0a0a0a,stroke:#FF6F00,stroke-width:2px,color:#fff
+```
+
+### LangGraph Agent Flow
+
+```mermaid
+graph LR
+    A[Entry Node] --> B{use_rag?}
+    B -->|Yes| C[RAG Retrieval<br/>ChromaDB]
+    B -->|No| E[Direct Generation<br/>Gemini]
+    C --> D[Generate with Context]
+    D --> F[Response]
+    E --> F
+
+    style A fill:#1C3C3C,stroke:#10b981,color:#fff
+    style B fill:#1C3C3C,stroke:#f59e0b,color:#fff
+    style C fill:#1C3C3C,stroke:#FF6F00,color:#fff
+    style D fill:#1C3C3C,stroke:#4285F4,color:#fff
+    style E fill:#1C3C3C,stroke:#4285F4,color:#fff
+    style F fill:#1C3C3C,stroke:#10b981,color:#fff
+```
+
+---
+
+## Quick Start
 
 ### Prerequisites
 
-*   **Python 3.12+**
-*   **Node.js 18+** and `npm`
-*   **Redis** instance running.
-*   **Docker** (Optional, for running local LLMs as shown in `server/test/docker-llm.py`).
+- **Python** 3.12+
+- **Node.js** 18+ and npm
+- **Redis** instance (local or cloud)
+- **Google API Key** with Gemini access
 
-### Backend Setup (`/server`)
+### 1. Backend Setup
 
-1.  **Navigate to the server directory:**
-    ```bash
-    cd server
-    ```
+```bash
+cd server
 
-2.  **Create and activate a virtual environment:**
-    ```bash
-    python -m venv .venv
-    source .venv/bin/activate
-    # On Windows: .venv\Scripts\activate
-    ```
+# Create virtual environment
+python -m venv .venv
+source .venv/bin/activate    # Windows: .venv\Scripts\activate
 
-3.  **Install dependencies:**
-    The project uses `uv` for faster package management, but `pip` works fine.
-    ```bash
-    # Using uv (recommended)
-    pip install uv
-    uv sync
+# Install dependencies
+pip install uv && uv sync   # or: pip install -r requirements.txt
 
-    # Or using pip
-    pip install -r requirements.txt
-    ```
+# Configure environment
+cp .env.example .env
+```
 
-4.  **Set up environment variables:**
-    Create a `.env` file in the `/server` directory by copying the example:
-    ```bash
-    cp .env.example .env
-    ```
-    Now, edit the `.env` file and add your API keys:
-    ```dotenv
-    # server/.env
-    GOOGLE_API_KEY="your-google-api-key"
-    REDIS_URL="redis://localhost:6379"
+Edit `server/.env`:
 
-    # Optional for web search tool
-    TAVILY_API_KEY="your-tavily-api-key"
-    ```
+```env
+GOOGLE_API_KEY=your_google_api_key
+REDIS_URL=redis://localhost:6379
+TAVILY_API_KEY=your_tavily_key    # Optional — enables web search tool
+```
 
-5.  **Run the backend server:**
-    ```bash
-    uvicorn app.main:app --reload
-    ```
-    The server will be running at `http://localhost:8000`.
+```bash
+# Start the server
+uvicorn app.main:app --reload    # → http://localhost:8000
+```
 
-### Frontend Setup (`/client`)
+### 2. Frontend Setup
 
-1.  **Navigate to the client directory:**
-    ```bash
-    cd client
-    ```
+```bash
+cd client
+npm install
+npm run dev                      # → http://localhost:5173
+```
 
-2.  **Install dependencies:**
-    ```bash
-    npm install
-    ```
-
-3.  **Run the frontend development server:**
-    ```bash
-    npm run dev
-    ```
-    The React application will be available at `http://localhost:5173`. It is pre-configured to proxy API requests to the backend server.
+> The Vite dev server proxies `/api` requests to the backend automatically.
 
 ---
 
-## 4. Project Structure Deep Dive
+## Project Structure
 
-The project is organized into two main parts: `client` and `server`.
-
-### `client/`
-
-*   `public/worklets/audio-processor.js`: A crucial **AudioWorklet** that runs in a separate thread in the browser. It captures raw audio from the microphone, converts it to 16-bit PCM format, and sends it back to the main thread for WebSocket transmission.
-*   `src/api/client.ts`: A pre-configured `axios` instance for making HTTP requests to the backend.
-*   `src/components/`: Contains all React components.
-    *   `ui/`: Auto-generated, re-usable low-level components from **shadcn/ui**.
-    *   `ChatLayout.tsx`: The main component that assembles the entire chat interface, including the header, message list, and input area. It manages the state for the RAG toggles.
-    *   `ChatInput.tsx`: The input component for text, handling file uploads and the RAG mode toggle.
-    *   `ChatMessage.tsx`: Renders a single message bubble, styled differently for 'user', 'assistant', and 'system' roles.
-    *   `LiveChatModal.tsx`: The modal dialog for the live voice conversation, containing the microphone button, visualizers, and connection status logic.
-    *   `MessageList.tsx`: Renders the list of messages and the "Thinking..." indicator.
-*   `src/hooks/`: Contains the core frontend logic.
-    *   `useChat.ts`: Manages the state and logic for text-based chat and file uploads.
-    *   `useLiveVoiceChat.ts`: A powerful hook encapsulating all logic for the live voice chat feature, including WebSocket connection, audio recording/playback, and state management (`connecting`, `recording`, `speaking`, etc.).
-*   `vite.config.ts`: Vite configuration, including the `/api` proxy to the backend.
-
-### `server/`
-
-*   `app/main.py`: The FastAPI application entry point. It sets up CORS middleware and includes the API routers.
-*   `app/api/v1/endpoints/`: Defines the API routes.
-    *   `chat.py`: Handles the `/chat` endpoint for text-based conversations. It receives the user's message and the `use_rag` flag.
-    *   `upload.py`: Handles file uploads, saves the file temporarily, parses it, and adds the content to the vector store with the correct `session_id`.
-    *   `live_chat.py`: Manages the WebSocket connection for real-time voice chat. It receives audio chunks from the client and streams audio responses from Gemini back.
-*   `app/agent/`: The core of the AI's logic.
-    *   `state.py`: Defines the `AgentState` TypedDict, which is the "memory" or state that is passed between nodes in the graph.
-    *   `nodes.py`: Contains the individual functions (nodes) that perform specific actions, such as retrieving from RAG, generating a direct response, or calling a web search tool.
-    *   `graph.py`: Constructs the `StateGraph`. It defines the nodes and the conditional edges that determine the flow of the conversation (e.g., if `use_rag` is true, go to the RAG node; otherwise, go to the direct generation node).
-*   `app/core/`: Application configuration.
-    *   `config.py`: Loads environment variables from the `.env` file using Pydantic's `BaseSettings`.
-*   `app/services/`: Contains services that the agent nodes use.
-    *   `document_parser.py`: Logic for parsing different file types (`.pdf`, `.docx`, etc.) into text chunks.
-    *   `vector_store.py`: Abstraction for interacting with **ChromaDB**. It handles the embedding and storage of documents and, most importantly, provides a `get_retriever` function that filters by `session_id`.
-*   `chroma_db/`: The directory where the persistent ChromaDB vector data is stored.
-
----
-
-## 5. Core Functionality Walkthrough
-
-### Text Chat with RAG
-
-1.  **User toggles "Query Uploaded Files"**: In `ChatInput.tsx`, the `isRagEnabled` state is set to `true`.
-2.  **User sends a message**: The `sendMessage` function in `useChat.ts` is called, passing `isRagEnabled: true`.
-3.  **API Call**: An HTTP POST request is made to `/api/v1/chat` with the message, `session_id`, and `use_rag: true`.
-4.  **Agent Execution**:
-    *   The `agent_executer` in `chat.py` is invoked.
-    *   The `agent_entry` node in `graph.py` is the entry point.
-    *   The conditional edge router calls `check_for_rag` from `nodes.py`. Since `use_rag` is `true`, it returns the string `"rag_retrieval"`.
-    *   The graph transitions to the `retrieve_from_rag` node. This node calls `vector_store.get_retriever(session_id)`, which creates a ChromaDB retriever filtered specifically for the user's session documents. It invokes the retriever and adds the retrieved context to the agent's state.
-    *   The graph then transitions to the `generate_with_context` node. This node constructs a detailed prompt containing the user's question and the retrieved document snippets, then invokes the Gemini model.
-    *   The response from the LLM is added to the state, and the graph execution ends.
-5.  **Response to Frontend**: The final message content is sent back to the client and displayed in the UI.
-
-### Live Voice Chat with RAG
-
-1.  **User enables "Voice RAG"**: In `ChatLayout.tsx`, the `isVoiceRagEnabled` state is set to `true`.
-2.  **User opens the Live Chat Modal**: The `useLiveVoiceChat` hook is initialized with `isRagEnabled: true` and the `session_id`.
-3.  **WebSocket Connection**: The hook establishes a WebSocket connection to `/ws/v1/live-chat`. Upon connection, it sends an initial configuration message: `{"config": {"isRagEnabled": true, "sessionId": "..."}}`.
-4.  **Backend Context Fetching**: The `live_chat.py` endpoint receives this config. Because `isRagEnabled` is true, it calls `get_rag_context_for_session(session_id)` to fetch *all* document chunks for that session from ChromaDB.
-5.  **System Prompt Injection**: It then constructs a large system prompt containing all the document context and instructs the Gemini Live model to *only* use this information for its answers. This prompt is used to configure the Gemini Live session.
-6.  **Real-time Streaming**:
-    *   The user speaks into the microphone. The `audio-processor.js` worklet captures, processes, and forwards PCM audio data.
-    *   `useLiveVoiceChat` sends these audio chunks over the WebSocket.
-    *   The backend's `browser_to_gemini` task forwards these chunks directly to the Gemini Live API.
-    *   Gemini processes the audio in real-time and streams back audio responses.
-    *   The backend's `gemini_to_browser` task receives this audio, base64-encodes it, and sends it back to the client over the WebSocket.
-    *   The `useLiveVoiceChat` hook receives the audio, decodes it, and plays it through the browser's speakers, creating a seamless conversational experience.
+```
+├── client/                             # React Frontend
+│   ├── public/
+│   │   └── worklets/
+│   │       └── audio-processor.js     # AudioWorklet — mic to PCM conversion
+│   │
+│   └── src/
+│       ├── api/
+│       │   └── client.ts             # Axios instance (pre-configured)
+│       │
+│       ├── components/
+│       │   ├── ui/                    # shadcn/ui component library
+│       │   ├── ChatLayout.tsx         # Main chat shell + RAG toggles
+│       │   ├── ChatInput.tsx          # Text input + file upload + mode toggle
+│       │   ├── ChatMessage.tsx        # Message bubble (user / assistant / system)
+│       │   ├── LiveChatModal.tsx      # Voice conversation modal
+│       │   └── MessageList.tsx        # Message list + typing indicator
+│       │
+│       └── hooks/
+│           ├── useChat.ts            # Text chat and file upload logic
+│           └── useLiveVoiceChat.ts   # WebSocket audio + recording state machine
+│
+├── server/                             # FastAPI Backend
+│   ├── app/
+│   │   ├── main.py                   # FastAPI entry + CORS + routers
+│   │   │
+│   │   ├── api/v1/endpoints/
+│   │   │   ├── chat.py              # POST /chat — text conversation
+│   │   │   ├── upload.py            # POST /upload — file processing
+│   │   │   └── live_chat.py         # WS /live-chat — voice streaming
+│   │   │
+│   │   ├── agent/
+│   │   │   ├── state.py             # AgentState TypedDict
+│   │   │   ├── nodes.py             # Graph nodes (RAG, generate, search)
+│   │   │   └── graph.py             # StateGraph construction + routing
+│   │   │
+│   │   ├── core/
+│   │   │   └── config.py            # Pydantic BaseSettings (.env loader)
+│   │   │
+│   │   └── services/
+│   │       ├── document_parser.py   # PDF, DOCX, TXT to text chunks
+│   │       └── vector_store.py      # ChromaDB wrapper + session filtering
+│   │
+│   └── chroma_db/                    # Persistent vector data
+```
 
 ---
 
-## 6. API Reference
+## How It Works
+
+### Text Chat + RAG
+
+```
+User toggles "Query Files" → sends message
+    ↓
+POST /api/v1/chat { message, session_id, use_rag: true }
+    ↓
+LangGraph Entry Node → check_for_rag → "rag_retrieval"
+    ↓
+retrieve_from_rag → ChromaDB filtered by session_id
+    ↓
+generate_with_context → Gemini with retrieved chunks
+    ↓
+Response returned to frontend
+```
+
+### Live Voice + RAG
+
+```
+User enables "Voice RAG" → opens mic modal
+    ↓
+WebSocket connects → sends { config: { isRagEnabled: true, sessionId } }
+    ↓
+Backend fetches ALL session docs from ChromaDB
+    ↓
+System prompt injected with full document context
+    ↓
+User speaks → AudioWorklet → PCM → WebSocket → Gemini Live API
+    ↓
+Gemini responds → audio stream → WebSocket → browser speakers
+```
+
+---
+
+## API Reference
 
 ### Text Chat
 
-*   **Endpoint**: `POST /api/v1/chat`
-*   **Request Body**:
-    ```json
-    {
-      "session_id": "string",
-      "message": "string",
-      "use_rag": "boolean"
-    }
-    ```
-*   **Response**:
-    ```json
-    {
-      "response": "The assistant's generated text response."
-    }
-    ```
+**`POST /api/v1/chat`**
+
+```json
+// Request
+{ "session_id": "abc-123", "message": "What does the report say about Q3?", "use_rag": true }
+
+// Response
+{ "response": "According to the uploaded report, Q3 revenue grew by..." }
+```
 
 ### File Upload
 
-*   **Endpoint**: `POST /api/v1/upload`
-*   **Request Body**: `multipart/form-data`
-    *   `file`: The uploaded file.
-    *   `session_id`: The user's session ID (string).
-*   **Response**:
-    ```json
-    {
-        "status": "success",
-        "filename": "string",
-        "chunks_added": "integer",
-        "message": "string"
-    }
-    ```
+**`POST /api/v1/upload`** — `multipart/form-data`
+
+| Field | Type | Description |
+|:------|:-----|:------------|
+| `file` | File | The document to upload (`.pdf`, `.docx`, `.txt`) |
+| `session_id` | String | Session identifier for scoped retrieval |
+
+```json
+// Response
+{ "status": "success", "filename": "report.pdf", "chunks_added": 42, "message": "Document processed" }
+```
 
 ### Live Voice Chat
 
-*   **Endpoint**: `WS /ws/v1/live-chat`
-*   **Protocol**:
-    1.  **Client -> Server (on connect)**: A JSON string with initial configuration.
-        ```json
-        {
-          "config": {
-            "isRagEnabled": true,
-            "sessionId": "your-session-id"
-          }
-        }
-        ```
-    2.  **Client -> Server (during conversation)**: A stream of JSON messages containing base64-encoded audio chunks.
-        ```json
-        {"audio_chunk": "base64-encoded-pcm-data"}
-        ```
-    3.  **Server -> Client (during conversation)**: A stream of JSON messages with the assistant's base64-encoded audio response.
-        ```json
-        {"audio_chunk": "base64-encoded-response-audio-data"}
-        ```
+**`WS /ws/v1/live-chat`**
+
+| Direction | Message Format |
+|:----------|:---------------|
+| Client → Server (connect) | `{ "config": { "isRagEnabled": true, "sessionId": "abc-123" } }` |
+| Client → Server (audio) | `{ "audio_chunk": "<base64-pcm-data>" }` |
+| Server → Client (audio) | `{ "audio_chunk": "<base64-response-audio>" }` |
 
 ---
 
-## 7. Future Improvements
+## Tech Stack
 
-*   **Streaming for Text Chat**: Implement `astream_events` in the text chat endpoint for a token-by-token streaming effect, similar to ChatGPT.
-*   **Error Handling and Resilience**: Add more robust error handling and retry mechanisms, especially for API calls and WebSocket connections.
-*   **Multi-Model Routing**: Implement the `route_to_llm` logic in the LangGraph agent to dynamically select different models (Groq for code, Gemini for creative tasks) based on the user's prompt.
-*   **User Authentication**: Add a proper user authentication layer to manage user-specific data and sessions more securely.
-*   **UI Enhancements**: Add features like viewing/deleting uploaded files, displaying message sources for RAG responses, and providing user feedback mechanisms.
-*   **Local LLM Integration**: Fully integrate the Docker Model Runner setup from `/server/test/docker-llm.py` as a selectable backend option.
+### Frontend
+
+| Layer | Technology |
+|:------|:-----------|
+| Framework | React 18 with Vite |
+| Language | TypeScript |
+| Styling | Tailwind CSS |
+| UI Components | shadcn/ui (Radix UI primitives) |
+| HTTP Client | Axios |
+| Real-time | WebSocket (native) |
+| Audio | Web Audio API + AudioWorklet |
+
+### Backend
+
+| Layer | Technology |
+|:------|:-----------|
+| Framework | FastAPI (async) |
+| Language | Python 3.12+ |
+| Agent Orchestration | LangGraph (StateGraph) |
+| LLM — Text | Google Gemini 1.5 Flash (via langchain-google-genai) |
+| LLM — Voice | Google Gemini 2.0 Flash (Live API) |
+| Vector Store | ChromaDB with Google `embedding-001` |
+| Chat History | Redis (RedisChatMessageHistory) |
+| Document Parsing | Custom parser for PDF, DOCX, TXT |
+| Config | Pydantic BaseSettings |
+| Real-time | WebSocket (FastAPI native) |
+
+---
+
+## Future Improvements
+
+- **Streaming text responses** — token-by-token SSE for text chat
+- **Multi-model routing** — Groq for code, Gemini for creative, OpenAI for reasoning
+- **File management UI** — view, delete, and re-index uploaded documents
+- **Source attribution** — show which document chunks powered each answer
+- **User authentication** — persistent accounts with session management
+- **Local LLM support** — Docker Model Runner as a selectable backend
+
+---
+
+## Contributing
+
+1. Fork the repository
+2. Create your feature branch → `git checkout -b feat/new-feature`
+3. Commit your changes → `git commit -m "feat: add new feature"`
+4. Push to the branch → `git push origin feat/new-feature`
+5. Open a Pull Request
+
+---
+
+## License
+
+See [LICENSE](LICENSE) for details.
+
+---
+
+<div align="center">
+
+**[Back to Top](#multimodal-live-rag-voice-chatbot)**
+
+</div>
